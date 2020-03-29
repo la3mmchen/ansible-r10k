@@ -1,0 +1,8 @@
+roles/*
+inventories/*
+runtime/*
+!*.gitkeep*
+!develop/.gitkeep
+develop/*
+.vault-pw
+artefacts/*

@@ -1,0 +1,5 @@
+---
+roles:
+  - src: "https://github.com/bbatsche/Ansible-Common-Role.git"
+    name: "common"
+    version: "master"

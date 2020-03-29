@@ -1,0 +1,101 @@
+---
+# this playbook loads dependencies.
+
+- hosts: localhost
+  gather_facts: no
+  vars:
+    identifier: "unset"
+  tasks:
+    - become: false
+      local_action: set_fact
+      args:
+        artefact_file: "{{identifier | default('check_run')}}"
+      no_log: true
+
+    - name: "manage local directories"
+      become: false
+      local_action: file
+      args:
+        path: "{{playbook_dir}}/{{item.path}}"
+        state: "{{item.state}}"
+      with_items:
+        - { "path": "inventories", "state": "absent" }
+        - { "path": "roles", "state": "absent" }
+        - { "path": "runtime", "state": "absent" }
+        - { "path": "runtime", "state": "directory" }
+        - { "path": "roles", "state": "directory" }
+        - { "path": "inventories", "state": "directory" }
+        - { "path": "artefacts", "state": "directory" }
+
+    - name: "include config"
+      become: false
+      local_action: include_vars
+      args:
+        file: "{{item}}"
+      with_items:
+        - "{{playbook_dir}}/configs/Ansiblefile"
+
+    - name: "fetch required roles"
+      become: false
+      local_action: git
+      args:
+        repo: "{{item.src}}"
+        dest: "{{playbook_dir}}/roles/{{item.name}}"
+        version: "{{item.version}}"
+      with_items:
+        - "{{roles}}"
+      register: fetch_roles
+
+    - name: track versions for artefacts
+      become: false
+      no_log: true
+      local_action: lineinfile
+      args:
+        path: "{{playbook_dir}}/artefacts/{{artefact_file}}.log"
+        create: "yes"
+        line: "[{{item.after}}] ({{item.invocation.module_args.repo|urlsplit('path')}} / {{item.invocation.module_args.version}}) "
+      with_items:
+        - "{{fetch_roles.results}}"
+
+
+    - name: "link hosts file to inventories/*"
+      become: false
+      local_action: file
+      args:
+        src: "{{item.src}}"
+        dest: "{{item.dest}}"
+        state: "link"
+      with_items:
+        - { "src": "{{playbook_dir}}/configs/Hostsfile", "dest": "{{playbook_dir}}/inventories/hosts" }
+
+    - name: "link groupvars to inventories/group_vars/*"
+      become: false
+      local_action: file
+      args:
+        src: "{{item}}"
+        dest: "{{playbook_dir}}/inventories/group_vars/{{ item | basename }}"
+        state: "link"
+      with_fileglob:
+        - "{{playbook_dir}}/configs/groupvars/*"
+
+    - name: "link hostvars to inventories/host_vars/*"
+      become: false
+      local_action: file
+      args:
+        src: "{{item}}"
+        dest: "{{playbook_dir}}/inventories/host_vars/{{ item | basename }}"
+        state: "link"
+      with_fileglob:
+        - "{{playbook_dir}}/configs/hostvars/*"
+
+    - name: track runtime information
+      become: false
+      no_log: true
+      local_action: lineinfile
+      args:
+        path: "{{playbook_dir}}/artefacts/{{artefact_file}}.log"
+        create: "yes"
+        line: "{{item}}"
+      with_items:
+        - "-----"
+        - "{{ environment | to_nice_json }}"
